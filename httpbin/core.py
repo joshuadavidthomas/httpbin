@@ -62,18 +62,6 @@ ENV_COOKIES = (
 )
 
 
-def jsonify_response(data: Dict[str, Any], status_code: int = 200) -> Response:
-    """Return a JSON response with a trailing newline."""
-    json_str = json.dumps(data, indent=2, sort_keys=True)
-    if not json_str.endswith("\n"):
-        json_str += "\n"
-    return Response(
-        content=json_str,
-        status_code=status_code,
-        media_type=MediaType.JSON,
-    )
-
-
 def load_resource(filename: str) -> bytes:
     """Load a resource file."""
     path = tmpl_dir / filename
@@ -108,37 +96,37 @@ async def view_deny_page() -> Response[str]:
 
 
 @get("/ip", tags=["Request inspection"])
-async def view_origin(request: Request) -> Response:
+async def view_origin(request: Request) -> dict:
     """Returns the requester's IP Address."""
     origin = request.headers.get(
         "X-Forwarded-For", request.client.host if request.client else ""
     )
-    return jsonify_response({"origin": origin})
+    return {"origin": origin}
 
 
 @get("/uuid", tags=["Dynamic data"])
-async def view_uuid() -> Response:
+async def view_uuid() -> dict:
     """Return a UUID4."""
-    return jsonify_response({"uuid": str(uuid.uuid4())})
+    return {"uuid": str(uuid.uuid4())}
 
 
 @get("/headers", tags=["Request inspection"])
-async def view_headers(request: Request) -> Response:
+async def view_headers(request: Request) -> dict:
     """Return the incoming request's HTTP headers."""
-    return jsonify_response(await get_dict(request, "headers"))
+    return await get_dict(request, "headers")
 
 
 @get("/user-agent", tags=["Request inspection"])
-async def view_user_agent(request: Request) -> Response:
+async def view_user_agent(request: Request) -> dict:
     """Return the incoming requests's User-Agent header."""
     headers = get_headers(request)
-    return jsonify_response({"user-agent": headers.get("user-agent", "")})
+    return {"user-agent": headers.get("user-agent", "")}
 
 
 @get("/get", tags=["HTTP Methods"])
-async def view_get(request: Request) -> Response:
+async def view_get(request: Request) -> dict:
     """The request's query parameters."""
-    return jsonify_response(await get_dict(request, "url", "args", "headers", "origin"))
+    return await get_dict(request, "url", "args", "headers", "origin")
 
 
 @get("/anything", tags=["Anything"])
@@ -151,75 +139,68 @@ async def view_get(request: Request) -> Response:
 @put("/anything/{anything:path}", tags=["Anything"])
 @delete("/anything/{anything:path}", tags=["Anything"])
 @patch("/anything/{anything:path}", tags=["Anything"])
-async def view_anything(request: Request, anything: Optional[str] = None) -> Response:
+async def view_anything(request: Request, anything: Optional[str] = None) -> dict:
     """Returns anything passed in request data."""
-    return jsonify_response(
-        get_dict(
-            request,
-            "url",
-            "args",
-            "headers",
-            "origin",
-            "method",
-            "form",
-            "data",
-            "files",
-            "json",
-        )
+    return await get_dict(
+        request,
+        "url",
+        "args",
+        "headers",
+        "origin",
+        "method",
+        "form",
+        "data",
+        "files",
+        "json",
     )
 
 
 @post("/post", tags=["HTTP Methods"])
-async def view_post(request: Request) -> Response:
+async def view_post(request: Request) -> dict:
     """The request's POST parameters."""
-    return jsonify_response(
-        get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
-    )
+    return await get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
 
 
 @put("/put", tags=["HTTP Methods"])
-async def view_put(request: Request) -> Response:
+async def view_put(request: Request) -> dict:
     """The request's PUT parameters."""
-    return jsonify_response(
-        get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
-    )
+    return await get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
 
 
 @patch("/patch", tags=["HTTP Methods"])
-async def view_patch(request: Request) -> Response:
+async def view_patch(request: Request) -> dict:
     """The request's PATCH parameters."""
-    return jsonify_response(
-        get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
-    )
+    return await get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
 
 
 @delete("/delete", tags=["HTTP Methods"], status_code=200)
-async def view_delete(request: Request) -> Response:
+async def view_delete(request: Request) -> dict:
     """The request's DELETE parameters."""
-    return jsonify_response(
-        get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
-    )
+    return await get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
 
 
 @get("/gzip", tags=["Response formats"])
 async def view_gzip_encoded_content(request: Request) -> Response:
     """Returns GZip-encoded data."""
     data = await get_dict(request, "origin", "headers", method=request.method, gzipped=True)
-    return filters.gzip_response(jsonify_response(data))
+    response = Response(content=json.dumps(data), media_type=MediaType.JSON)
+    return filters.gzip_response(response)
 
 
 @get("/deflate", tags=["Response formats"])
 async def view_deflate_encoded_content(request: Request) -> Response:
     """Returns Deflate-encoded data."""
     data = await get_dict(request, "origin", "headers", method=request.method, deflated=True)
-    return filters.deflate_response(jsonify_response(data))
+    response = Response(content=json.dumps(data), media_type=MediaType.JSON)
+    return filters.deflate_response(response)
 
 
 @get("/brotli", tags=["Response formats"])
 async def view_brotli_encoded_content(request: Request) -> Response:
     """Returns Brotli-encoded data."""
     data = await get_dict(request, "origin", "headers", method=request.method, brotli=True)
-    return filters.brotli_response(jsonify_response(data))
+    response = Response(content=json.dumps(data), media_type=MediaType.JSON)
+    return filters.brotli_response(response)
 
 
 @get("/redirect/{n:int}", tags=["Redirects"])
@@ -361,7 +342,7 @@ async def response_headers(request: Request) -> Response:
 
 
 @get("/cookies", tags=["Cookies"])
-async def view_cookies(request: Request) -> Response:
+async def view_cookies(request: Request) -> dict:
     """Returns cookie data."""
     cookies = dict(request.cookies.items())
 
@@ -370,7 +351,7 @@ async def view_cookies(request: Request) -> Response:
         for key in ENV_COOKIES:
             cookies.pop(key, None)
 
-    return jsonify_response({"cookies": cookies})
+    return {"cookies": cookies}
 
 
 @get("/forms/post", media_type=MediaType.HTML, tags=["Cookies"])
@@ -416,27 +397,27 @@ async def delete_cookies(request: Request) -> Response:
 
 
 @get("/basic-auth/{user:str}/{passwd:str}", tags=["Auth"])
-async def basic_auth(request: Request, user: str = "user", passwd: str = "passwd") -> Response:
+async def basic_auth(request: Request, user: str = "user", passwd: str = "passwd") -> dict:
     """Prompts the user for authorization using HTTP Basic Auth."""
     if not check_basic_auth(request, user, passwd):
         return status_code(request, 401)
 
-    return jsonify_response({"authenticated": True, "user": user})
+    return {"authenticated": True, "user": user}
 
 
 @get("/hidden-basic-auth/{user:str}/{passwd:str}", tags=["Auth"])
 async def hidden_basic_auth(
     request: Request, user: str = "user", passwd: str = "passwd"
-) -> Response:
+) -> dict:
     """Prompts the user for authorization using HTTP Basic Auth."""
     if not check_basic_auth(request, user, passwd):
         return status_code(request, 404)
 
-    return jsonify_response({"authenticated": True, "user": user})
+    return {"authenticated": True, "user": user}
 
 
 @get("/bearer", tags=["Auth"])
-async def bearer_auth(request: Request) -> Response:
+async def bearer_auth(request: Request) -> dict:
     """Prompts the user for authorization using bearer authentication."""
     authorization = request.headers.get("Authorization", "")
 
@@ -448,7 +429,7 @@ async def bearer_auth(request: Request) -> Response:
         )
 
     token = authorization[len("Bearer ") :]
-    return jsonify_response({"authenticated": True, "token": token})
+    return {"authenticated": True, "token": token}
 
 
 @get("/digest-auth/{qop:str}/{user:str}/{passwd:str}", tags=["Auth"])
@@ -514,8 +495,10 @@ async def digest_auth(
         return response
 
     if require_cookie_handling and request.cookies.get("fake") != "fake_value":
-        response = jsonify_response(
-            {"errors": ["missing cookie set on challenge"]}, status_code=403
+        response = Response(
+            content={"errors": ["missing cookie set on challenge"]},
+            status_code=403,
+            media_type=MediaType.JSON,
         )
         response.set_cookie("fake", value="fake_value")
         return response
@@ -541,7 +524,10 @@ async def digest_auth(
         response.set_cookie("fake", value="fake_value")
         return response
 
-    response = jsonify_response({"authenticated": True, "user": user})
+    response = Response(
+        content={"authenticated": True, "user": user},
+        media_type=MediaType.JSON,
+    )
     response.set_cookie("fake", value="fake_value")
 
     if stale_after_value:
@@ -555,14 +541,12 @@ async def digest_auth(
 @put("/delay/{delay:int}", tags=["Dynamic data"])
 @delete("/delay/{delay:int}", tags=["Dynamic data"])
 @patch("/delay/{delay:int}", tags=["Dynamic data"])
-async def delay_response(request: Request, delay: int) -> Response:
+async def delay_response(request: Request, delay: int) -> dict:
     """Returns a delayed response (max of 10 seconds)."""
     delay = min(float(delay), 10)
     await asyncio.sleep(delay)
 
-    return jsonify_response(
-        get_dict(request, "url", "args", "form", "data", "origin", "headers", "files")
-    )
+    return await get_dict(request, "url", "args", "form", "data", "origin", "headers", "files")
 
 
 @get("/drip", tags=["Dynamic data"])
@@ -849,28 +833,26 @@ async def xml() -> Template:
 
 
 @get("/json", tags=["Response formats"])
-async def a_json_endpoint() -> Response:
+async def a_json_endpoint() -> dict:
     """Returns a simple JSON document."""
-    return jsonify_response(
-        {
-            "slideshow": {
-                "title": "Sample Slide Show",
-                "date": "date of publication",
-                "author": "Yours Truly",
-                "slides": [
-                    {"type": "all", "title": "Wake up to WonderWidgets!"},
-                    {
-                        "type": "all",
-                        "title": "Overview",
-                        "items": [
-                            "Why <em>WonderWidgets</em> are great",
-                            "Who <em>buys</em> WonderWidgets",
-                        ],
-                    },
-                ],
-            }
+    return {
+        "slideshow": {
+            "title": "Sample Slide Show",
+            "date": "date of publication",
+            "author": "Yours Truly",
+            "slides": [
+                {"type": "all", "title": "Wake up to WonderWidgets!"},
+                {
+                    "type": "all",
+                    "title": "Overview",
+                    "items": [
+                        "Why <em>WonderWidgets</em> are great",
+                        "Who <em>buys</em> WonderWidgets",
+                    ],
+                },
+            ],
         }
-    )
+    }
 
 
 # Collect all route handlers
