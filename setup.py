@@ -10,7 +10,7 @@ setup(
     name="httpbin",
     version=version,
     description="HTTP Request and Response Service",
-    long_description="A simple HTTP Request & Response Service, written in Python + Flask.",
+    long_description="A simple HTTP Request & Response Service, written in modern Python + Litestar.",
 
     # The project URL.
     url='https://github.com/requests/httpbin',
@@ -28,14 +28,21 @@ setup(
          'Natural Language :: English',
          'License :: OSI Approved :: MIT License',
          'Programming Language :: Python',
-         'Programming Language :: Python :: 2.7',
-         'Programming Language :: Python :: 3.6',
+         'Programming Language :: Python :: 3.8',
+         'Programming Language :: Python :: 3.9',
+         'Programming Language :: Python :: 3.10',
+         'Programming Language :: Python :: 3.11',
+         'Programming Language :: Python :: 3.12',
     ],
     test_suite="test_httpbin",
     packages=find_packages(),
     include_package_data = True, # include files listed in MANIFEST.in
     install_requires=[
-        'Flask', 'MarkupSafe', 'decorator', 'itsdangerous', 'six', 'brotlipy',
-        'raven[flask]', 'werkzeug>=0.14.1', 'gevent', 'flasgger'
+        'litestar>=2.0.0',
+        'uvicorn[standard]>=0.24.0',
+        'brotli>=1.1.0',
+        'pydantic>=2.0.0',
+        'jinja2>=3.1.0',
+        'werkzeug>=3.0.0',
     ],
 )

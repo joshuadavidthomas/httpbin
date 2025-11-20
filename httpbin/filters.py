@@ -1,115 +1,65 @@
-# -*- coding: utf-8 -*-
-
 """
 httpbin.filters
 ~~~~~~~~~~~~~~~
 
-This module provides response filter decorators.
+This module provides response filter functions for compression.
 """
 
-import gzip as gzip2
+import gzip as gzip_module
 import zlib
-
-import brotli as _brotli
-
-from six import BytesIO
 from decimal import Decimal
 from time import time as now
 
-from decorator import decorator
-from flask import Flask, Response
+import brotli
+
+from litestar import Response
 
 
-app = Flask(__name__)
+def gzip_response(response: Response) -> Response:
+    """GZip compress a Litestar Response."""
+    if isinstance(response.content, (str, bytes)):
+        content = response.content.encode() if isinstance(response.content, str) else response.content
+
+        # Compress the content
+        compressed = gzip_module.compress(content, compresslevel=4)
+
+        # Update response
+        response.content = compressed
+        response.headers["Content-Encoding"] = "gzip"
+        response.headers["Content-Length"] = str(len(compressed))
+
+    return response
 
 
-@decorator
-def x_runtime(f, *args, **kwargs):
-    """X-Runtime Flask Response Decorator."""
+def deflate_response(response: Response) -> Response:
+    """Deflate compress a Litestar Response."""
+    if isinstance(response.content, (str, bytes)):
+        content = response.content.encode() if isinstance(response.content, str) else response.content
 
-    _t0 = now()
-    r = f(*args, **kwargs)
-    _t1 = now()
-    r.headers['X-Runtime'] = '{0}s'.format(Decimal(str(_t1 - _t0)))
+        # Compress the content
+        deflater = zlib.compressobj()
+        compressed = deflater.compress(content)
+        compressed += deflater.flush()
 
-    return r
+        # Update response
+        response.content = compressed
+        response.headers["Content-Encoding"] = "deflate"
+        response.headers["Content-Length"] = str(len(compressed))
 
-
-@decorator
-def gzip(f, *args, **kwargs):
-    """GZip Flask Response Decorator."""
-
-    data = f(*args, **kwargs)
-
-    if isinstance(data, Response):
-        content = data.data
-    else:
-        content = data
-
-    gzip_buffer = BytesIO()
-    gzip_file = gzip2.GzipFile(
-        mode='wb',
-        compresslevel=4,
-        fileobj=gzip_buffer
-    )
-    gzip_file.write(content)
-    gzip_file.close()
-
-    gzip_data = gzip_buffer.getvalue()
-
-    if isinstance(data, Response):
-        data.data = gzip_data
-        data.headers['Content-Encoding'] = 'gzip'
-        data.headers['Content-Length'] = str(len(data.data))
-
-        return data
-
-    return gzip_data
+    return response
 
 
-@decorator
-def deflate(f, *args, **kwargs):
-    """Deflate Flask Response Decorator."""
+def brotli_response(response: Response) -> Response:
+    """Brotli compress a Litestar Response."""
+    if isinstance(response.content, (str, bytes)):
+        content = response.content.encode() if isinstance(response.content, str) else response.content
 
-    data = f(*args, **kwargs)
+        # Compress the content
+        compressed = brotli.compress(content)
 
-    if isinstance(data, Response):
-        content = data.data
-    else:
-        content = data
+        # Update response
+        response.content = compressed
+        response.headers["Content-Encoding"] = "br"
+        response.headers["Content-Length"] = str(len(compressed))
 
-    deflater = zlib.compressobj()
-    deflated_data = deflater.compress(content)
-    deflated_data += deflater.flush()
-
-    if isinstance(data, Response):
-        data.data = deflated_data
-        data.headers['Content-Encoding'] = 'deflate'
-        data.headers['Content-Length'] = str(len(data.data))
-
-        return data
-
-    return deflated_data
-
-
-@decorator
-def brotli(f, *args, **kwargs):
-    """Brotli Flask Response Decorator"""
-
-    data = f(*args, **kwargs)
-
-    if isinstance(data, Response):
-        content = data.data
-    else:
-        content = data
-
-    deflated_data = _brotli.compress(content)
-
-    if isinstance(data, Response):
-        data.data = deflated_data
-        data.headers['Content-Encoding'] = 'br'
-        data.headers['Content-Length'] = str(len(data.data))
-
-        return data
-
-    return deflated_data
+    return response
