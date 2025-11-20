@@ -7,13 +7,12 @@ This module provides the core HttpBin experience using Litestar.
 
 import asyncio
 import base64
-import json
 import os
 import random
 import time
 import uuid
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Annotated, Any, AsyncGenerator
 
 import brotli as brotli_module
 from litestar import Litestar, MediaType, Request, Response, delete, get, patch, post, put
@@ -21,7 +20,9 @@ from litestar.config.cors import CORSConfig
 from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.exceptions import HTTPException
 from litestar.openapi.config import OpenAPIConfig
+from litestar.params import Parameter
 from litestar.response import Redirect, Stream, Template
+from litestar.serialization import encode_json
 from litestar.status_codes import (
     HTTP_200_OK,
     HTTP_206_PARTIAL_CONTENT,
@@ -68,7 +69,7 @@ version = VERSION_FILE.read_text().strip()
 # Template directory
 tmpl_dir = Path(__file__).parent / "templates"
 
-ENV_COOKIES = (
+ENV_COOKIES: frozenset[str] = frozenset([
     "_gauges_unique",
     "_gauges_unique_year",
     "_gauges_unique_month",
@@ -77,7 +78,7 @@ ENV_COOKIES = (
     "__utmz",
     "__utma",
     "__utmb",
-)
+])
 
 
 def load_resource(filename: str) -> bytes:
@@ -201,7 +202,7 @@ async def view_delete(request: Request) -> dict:
 async def view_gzip_encoded_content(request: Request) -> Response:
     """Returns GZip-encoded data."""
     data = await get_dict(request, "origin", "headers", method=request.method, gzipped=True)
-    response = Response(content=json.dumps(data), media_type=MediaType.JSON)
+    response = Response(content=encode_json(data), media_type=MediaType.JSON)
     return filters.gzip_response(response)
 
 
@@ -209,7 +210,7 @@ async def view_gzip_encoded_content(request: Request) -> Response:
 async def view_deflate_encoded_content(request: Request) -> Response:
     """Returns Deflate-encoded data."""
     data = await get_dict(request, "origin", "headers", method=request.method, deflated=True)
-    response = Response(content=json.dumps(data), media_type=MediaType.JSON)
+    response = Response(content=encode_json(data), media_type=MediaType.JSON)
     return filters.deflate_response(response)
 
 
@@ -217,12 +218,15 @@ async def view_deflate_encoded_content(request: Request) -> Response:
 async def view_brotli_encoded_content(request: Request) -> Response:
     """Returns Brotli-encoded data."""
     data = await get_dict(request, "origin", "headers", method=request.method, brotli=True)
-    response = Response(content=json.dumps(data), media_type=MediaType.JSON)
+    response = Response(content=encode_json(data), media_type=MediaType.JSON)
     return filters.brotli_response(response)
 
 
 @get("/redirect/{n:int}", tags=["Redirects"])
-async def redirect_n_times(request: Request, n: int) -> Response:
+async def redirect_n_times(
+    request: Request,
+    n: Annotated[int, Parameter(description="Number of redirects")],
+) -> Response:
     """302 Redirects n times."""
     assert n > 0
 
@@ -296,7 +300,10 @@ async def absolute_redirect_n_times(request: Request, n: int) -> Response:
 
 
 @get("/stream/{n:int}", tags=["Dynamic data"])
-async def stream_n_messages(request: Request, n: int) -> Stream:
+async def stream_n_messages(
+    request: Request,
+    n: Annotated[int, Parameter(description="Number of messages to stream (max 100)")],
+) -> Stream:
     """Stream n JSON responses."""
     response_data = await get_dict(request, "url", "args", "headers", "origin")
     n = min(n, 100)
@@ -304,7 +311,7 @@ async def stream_n_messages(request: Request, n: int) -> Stream:
     async def generate_stream() -> AsyncGenerator[bytes, None]:
         for i in range(n):
             response_data["id"] = i
-            yield (json.dumps(response_data) + "\n").encode()
+            yield encode_json(response_data) + b"\n"
 
     return Stream(generate_stream(), media_type=MediaType.JSON)
 
@@ -555,8 +562,8 @@ async def digest_auth(
 @patch("/delay/{delay:int}", tags=["Dynamic data"])
 async def delay_response(request: Request, delay: int) -> dict:
     """Returns a delayed response (max of 10 seconds)."""
-    delay = min(float(delay), 10)
-    await asyncio.sleep(delay)
+    delay_seconds = min(float(delay), 10)
+    await asyncio.sleep(delay_seconds)
 
     return await get_dict(request, "url", "args", "form", "data", "origin", "headers", "files")
 
@@ -662,7 +669,10 @@ async def encoding() -> Template:
 
 
 @get("/bytes/{n:int}", tags=["Dynamic data"])
-async def random_bytes(request: Request, n: int) -> Response:
+async def random_bytes(
+    request: Request,
+    n: Annotated[int, Parameter(description="Number of random bytes to generate (max 100KB)")],
+) -> Response:
     """Returns n random bytes generated with given seed."""
     n = min(n, 100 * 1024)  # 100KB limit
 
