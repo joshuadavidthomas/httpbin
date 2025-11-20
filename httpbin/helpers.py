@@ -217,42 +217,41 @@ def get_url(request: Request) -> str:
     return urlunparse(url)
 
 
-def get_dict(request: Request, *keys, **extras) -> Dict[str, Any]:
+async def get_dict(request: Request, *keys, **extras) -> Dict[str, Any]:
     """Returns request dict of given keys."""
     _keys = ("url", "args", "form", "data", "origin", "headers", "files", "json", "method")
 
     assert all(k in _keys for k in keys)
 
     # Get request body
-    import asyncio
+    data = b""
     try:
-        # Try to get body if not already consumed
-        if hasattr(request, "_body"):
-            data = request._body
-        else:
-            # Body might not be available in all cases
-            data = b""
+        data = await request.body()
     except Exception:
-        data = b""
+        pass
 
     # Get form data
+    form = {}
     try:
-        form = asyncio.run(request.form()) if asyncio.iscoroutinefunction(request.form) else {}
-        form = semiflatten(dict(form))
+        form_data = await request.form()
+        form = semiflatten(dict(form_data))
     except Exception:
-        form = {}
+        pass
 
     # Try to parse JSON
+    _json = None
     try:
-        _json = json.loads(data.decode("utf-8")) if data else None
+        if data:
+            _json = json.loads(data.decode("utf-8"))
     except (ValueError, TypeError, UnicodeDecodeError):
-        _json = None
+        pass
 
     # Get files
+    files = {}
     try:
-        files = asyncio.run(get_files(request))
+        files = await get_files(request)
     except Exception:
-        files = {}
+        pass
 
     d = dict(
         url=get_url(request),
@@ -455,7 +454,7 @@ def response(credentials: Any, password: str, request_dict: Dict[str, Any]) -> s
     return response_hash
 
 
-def check_digest_auth(request: Request, user: str, passwd: str) -> bool:
+async def check_digest_auth(request: Request, user: str, passwd: str) -> bool:
     """Check user authentication using HTTP Digest auth"""
     auth_header = request.headers.get("Authorization")
     if not auth_header:
@@ -471,10 +470,11 @@ def check_digest_auth(request: Request, user: str, passwd: str) -> bool:
         request_uri += "?" + str(request.url.query)
 
     # Get request body
+    body = b""
     try:
-        body = request._body if hasattr(request, "_body") else b""
+        body = await request.body()
     except Exception:
-        body = b""
+        pass
 
     response_hash = response(
         credentials,
