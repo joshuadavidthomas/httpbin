@@ -11,7 +11,7 @@ import os
 import re
 import time
 from hashlib import md5, sha256, sha512
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from litestar import Request, Response
@@ -21,7 +21,7 @@ from werkzeug.http import http_date
 from .structures import CaseInsensitiveDict
 
 
-def parse_authorization_header(value: Optional[str]) -> Optional[Authorization]:
+def parse_authorization_header(value: str | None) -> Authorization | None:
     """Parse an Authorization header.
 
     This is a simple implementation to replace the removed werkzeug function.
@@ -144,7 +144,7 @@ def json_safe(string: bytes, content_type: str = "application/octet-stream") -> 
         )
 
 
-async def get_files(request: Request) -> Dict[str, Any]:
+async def get_files(request: Request) -> dict[str, Any]:
     """Returns files dict from request context."""
     files = {}
 
@@ -181,7 +181,7 @@ def get_headers(request: Request, hide_env: bool = True) -> CaseInsensitiveDict:
     return CaseInsensitiveDict(headers.items())
 
 
-def semiflatten(multi: Dict) -> Dict:
+def semiflatten(multi: dict) -> dict:
     """Convert a MultiDict-like object into a regular dict.
 
     If there are more than one value for a key, the result will have a list of values for the key.
@@ -217,7 +217,7 @@ def get_url(request: Request) -> str:
     return urlunparse(url)
 
 
-async def get_dict(request: Request, *keys, **extras) -> Dict[str, Any]:
+async def get_dict(request: Request, *keys, **extras) -> dict[str, Any]:
     """Returns request dict of given keys."""
     _keys = ("url", "args", "form", "data", "origin", "headers", "files", "json", "method")
 
@@ -365,7 +365,7 @@ def HA1(realm: str, username: str, password: str, algorithm: str) -> str:
     )
 
 
-def HA2(credentials: Any, request_dict: Dict[str, str], algorithm: str) -> str:
+def HA2(credentials: Any, request_dict: dict[str, str], algorithm: str) -> str:
     """Create HA2 md5 hash
 
     If the qop directive's value is "auth" or is unspecified, then HA2:
@@ -398,7 +398,7 @@ def HA2(credentials: Any, request_dict: Dict[str, str], algorithm: str) -> str:
     raise ValueError("Invalid qop value")
 
 
-def response(credentials: Any, password: str, request_dict: Dict[str, Any]) -> str:
+def response(credentials: Any, password: str, request_dict: dict[str, Any]) -> str:
     """Compile digest auth response
 
     If the qop directive's value is "auth" or "auth-int", then compute the response as follows:
@@ -496,7 +496,7 @@ def secure_cookie(request: Request) -> bool:
     return str(request.url.scheme) == "https"
 
 
-def __parse_request_range(range_header_text: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
+def __parse_request_range(range_header_text: str | None) -> tuple[int | None, int | None]:
     """Return a tuple describing the byte range requested in a GET request
 
     If the range is open ended on the left or right side, then a value of None
@@ -540,7 +540,7 @@ def __parse_request_range(range_header_text: Optional[str]) -> Tuple[Optional[in
 
 def get_request_range(
     request_headers: CaseInsensitiveDict, upper_bound: int
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Parse Range header and return first and last byte positions."""
     first_byte_pos, last_byte_pos = __parse_request_range(
         request_headers.get("range")
@@ -561,7 +561,7 @@ def get_request_range(
     return first_byte_pos, last_byte_pos
 
 
-def parse_multi_value_header(header_str: Optional[str]) -> list:
+def parse_multi_value_header(header_str: str | None) -> list:
     """Break apart an HTTP header string that is potentially a quoted, comma separated list."""
     parsed_parts = []
     if header_str:
@@ -583,7 +583,7 @@ def next_stale_after_value(stale_after: str) -> str:
 
 
 def digest_challenge_response(
-    request: Request, qop: Optional[str], algorithm: str, stale: bool = False
+    request: Request, qop: str | None, algorithm: str, stale: bool = False
 ) -> Response:
     """Generate a digest auth challenge response."""
     # RFC2616 Section4.2: HTTP headers are ASCII

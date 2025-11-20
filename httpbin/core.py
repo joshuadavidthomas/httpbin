@@ -13,14 +13,32 @@ import random
 import time
 import uuid
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator
 
 import brotli as brotli_module
 from litestar import Litestar, MediaType, Request, Response, delete, get, patch, post, put
 from litestar.config.cors import CORSConfig
 from litestar.contrib.jinja import JinjaTemplateEngine
+from litestar.exceptions import HTTPException
 from litestar.openapi.config import OpenAPIConfig
 from litestar.response import Redirect, Stream, Template
+from litestar.status_codes import (
+    HTTP_200_OK,
+    HTTP_206_PARTIAL_CONTENT,
+    HTTP_301_MOVED_PERMANENTLY,
+    HTTP_302_FOUND,
+    HTTP_303_SEE_OTHER,
+    HTTP_304_NOT_MODIFIED,
+    HTTP_307_TEMPORARY_REDIRECT,
+    HTTP_308_PERMANENT_REDIRECT,
+    HTTP_400_BAD_REQUEST,
+    HTTP_401_UNAUTHORIZED,
+    HTTP_403_FORBIDDEN,
+    HTTP_404_NOT_FOUND,
+    HTTP_406_NOT_ACCEPTABLE,
+    HTTP_412_PRECONDITION_FAILED,
+    HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+)
 from litestar.template.config import TemplateConfig
 
 from . import filters
@@ -139,7 +157,7 @@ async def view_get(request: Request) -> dict:
 @put("/anything/{anything:path}", tags=["Anything"])
 @delete("/anything/{anything:path}", tags=["Anything"])
 @patch("/anything/{anything:path}", tags=["Anything"])
-async def view_anything(request: Request, anything: Optional[str] = None) -> dict:
+async def view_anything(request: Request, anything: str | None = None) -> dict:
     """Returns anything passed in request data."""
     return await get_dict(
         request,
@@ -173,7 +191,7 @@ async def view_patch(request: Request) -> dict:
     return await get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
 
 
-@delete("/delete", tags=["HTTP Methods"], status_code=200)
+@delete("/delete", tags=["HTTP Methods"], status_code=HTTP_200_OK)
 async def view_delete(request: Request) -> dict:
     """The request's DELETE parameters."""
     return await get_dict(request, "url", "args", "form", "data", "origin", "headers", "files", "json")
@@ -255,13 +273,13 @@ async def relative_redirect_n_times(request: Request, n: int) -> Response:
     if n == 1:
         return Response(
             content=b"",
-            status_code=302,
+            status_code=HTTP_302_FOUND,
             headers={"Location": "/get"},
         )
 
     return Response(
         content=b"",
-        status_code=302,
+        status_code=HTTP_302_FOUND,
         headers={"Location": f"/relative-redirect/{n - 1}"},
     )
 
@@ -302,7 +320,7 @@ async def view_status_code(request: Request, codes: str) -> Response:
         try:
             code = int(codes)
         except ValueError:
-            return Response(content="Invalid status code", status_code=400)
+            raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid status code")
         return status_code(request, code)
 
     choices = []
@@ -316,7 +334,7 @@ async def view_status_code(request: Request, codes: str) -> Response:
         try:
             choices.append((int(code), float(weight)))
         except ValueError:
-            return Response(content="Invalid status code", status_code=400)
+            raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid status code")
 
     code = weighted_choice(choices)
     return status_code(request, code)
@@ -328,15 +346,9 @@ async def response_headers(request: Request) -> Response:
     """Returns a set of response headers from the query string."""
     headers_dict = dict(request.query_params.items())
 
-    # Build response data
-    response_data = {}
-    for key, value in headers_dict.items():
-        response_data[key] = value
-
-    # Create response with custom headers
+    # Return query params as JSON body AND as response headers
     return Response(
-        content=json.dumps(response_data, indent=2) + "\n",
-        media_type=MediaType.JSON,
+        content=headers_dict,
         headers=headers_dict,
     )
 
@@ -397,7 +409,7 @@ async def delete_cookies(request: Request) -> Response:
 
 
 @get("/basic-auth/{user:str}/{passwd:str}", tags=["Auth"])
-async def basic_auth(request: Request, user: str = "user", passwd: str = "passwd") -> dict:
+async def basic_auth(request: Request, user: str = "user", passwd: str = "passwd") -> dict | Response:
     """Prompts the user for authorization using HTTP Basic Auth."""
     if not check_basic_auth(request, user, passwd):
         return status_code(request, 401)
@@ -408,7 +420,7 @@ async def basic_auth(request: Request, user: str = "user", passwd: str = "passwd
 @get("/hidden-basic-auth/{user:str}/{passwd:str}", tags=["Auth"])
 async def hidden_basic_auth(
     request: Request, user: str = "user", passwd: str = "passwd"
-) -> dict:
+) -> dict | Response:
     """Prompts the user for authorization using HTTP Basic Auth."""
     if not check_basic_auth(request, user, passwd):
         return status_code(request, 404)
@@ -417,14 +429,14 @@ async def hidden_basic_auth(
 
 
 @get("/bearer", tags=["Auth"])
-async def bearer_auth(request: Request) -> dict:
+async def bearer_auth(request: Request) -> dict | Response:
     """Prompts the user for authorization using bearer authentication."""
     authorization = request.headers.get("Authorization", "")
 
     if not (authorization and authorization.startswith("Bearer ")):
         return Response(
             content=b"",
-            status_code=401,
+            status_code=HTTP_401_UNAUTHORIZED,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -434,7 +446,7 @@ async def bearer_auth(request: Request) -> dict:
 
 @get("/digest-auth/{qop:str}/{user:str}/{passwd:str}", tags=["Auth"])
 async def digest_auth_md5(
-    request: Request, qop: Optional[str] = None, user: str = "user", passwd: str = "passwd"
+    request: Request, qop: str | None = None, user: str = "user", passwd: str = "passwd"
 ) -> Response:
     """Prompts the user for authorization using Digest Auth."""
     return await digest_auth(request, qop, user, passwd, "MD5", "never")
@@ -443,7 +455,7 @@ async def digest_auth_md5(
 @get("/digest-auth/{qop:str}/{user:str}/{passwd:str}/{algorithm:str}", tags=["Auth"])
 async def digest_auth_nostale(
     request: Request,
-    qop: Optional[str] = None,
+    qop: str | None = None,
     user: str = "user",
     passwd: str = "passwd",
     algorithm: str = "MD5",
@@ -458,7 +470,7 @@ async def digest_auth_nostale(
 )
 async def digest_auth(
     request: Request,
-    qop: Optional[str] = None,
+    qop: str | None = None,
     user: str = "user",
     passwd: str = "passwd",
     algorithm: str = "MD5",
@@ -497,7 +509,7 @@ async def digest_auth(
     if require_cookie_handling and request.cookies.get("fake") != "fake_value":
         response = Response(
             content={"errors": ["missing cookie set on challenge"]},
-            status_code=403,
+            status_code=HTTP_403_FORBIDDEN,
             media_type=MediaType.JSON,
         )
         response.set_cookie("fake", value="fake_value")
@@ -558,7 +570,7 @@ async def drip(request: Request) -> Stream:
     code = int(args.get("code", 200))
 
     if numbytes <= 0:
-        return Response(content="number of bytes must be positive", status_code=400)
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="number of bytes must be positive")
 
     delay = float(args.get("delay", 0))
     if delay > 0:
@@ -601,14 +613,15 @@ async def cache(request: Request) -> Response:
     )
 
     if is_conditional is None:
-        response = await view_get(request)
+        data = await view_get(request)
         from werkzeug.http import http_date
 
+        response = Response(content=data)
         response.headers["Last-Modified"] = http_date()
         response.headers["ETag"] = uuid.uuid4().hex
         return response
     else:
-        return status_code(request, 304)
+        return status_code(request, HTTP_304_NOT_MODIFIED)
 
 
 @get("/etag/{etag:str}", tags=["Response inspection"])
@@ -619,15 +632,16 @@ async def etag(request: Request, etag: str) -> Response:
 
     if if_none_match:
         if etag in if_none_match or "*" in if_none_match:
-            response = status_code(request, 304)
+            response = status_code(request, HTTP_304_NOT_MODIFIED)
             response.headers["ETag"] = etag
             return response
     elif if_match:
         if etag not in if_match and "*" not in if_match:
-            return status_code(request, 412)
+            return status_code(request, HTTP_412_PRECONDITION_FAILED)
 
     # Normal response
-    response = await view_get(request)
+    data = await view_get(request)
+    response = Response(content=data)
     response.headers["ETag"] = etag
     return response
 
@@ -635,7 +649,8 @@ async def etag(request: Request, etag: str) -> Response:
 @get("/cache/{value:int}", tags=["Response inspection"])
 async def cache_control(request: Request, value: int) -> Response:
     """Sets a Cache-Control header for n seconds."""
-    response = await view_get(request)
+    data = await view_get(request)
+    response = Response(content=data)
     response.headers["Cache-Control"] = f"public, max-age={value}"
     return response
 
@@ -691,7 +706,7 @@ async def range_request(request: Request, numbytes: int) -> Response | Stream:
     if numbytes <= 0 or numbytes > (100 * 1024):
         return Response(
             content="number of bytes must be in the range (0, 102400]",
-            status_code=404,
+            status_code=HTTP_404_NOT_FOUND,
             headers={
                 "ETag": f"range{numbytes}",
                 "Accept-Ranges": "bytes",
@@ -714,7 +729,7 @@ async def range_request(request: Request, numbytes: int) -> Response | Stream:
     ):
         return Response(
             content=b"",
-            status_code=416,
+            status_code=HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
             headers={
                 "ETag": f"range{numbytes}",
                 "Accept-Ranges": "bytes",
@@ -795,7 +810,7 @@ async def image(request: Request) -> Response:
     elif "image/png" in accept or "image/*" in accept:
         return await image_png()
     else:
-        return status_code(request, 406)
+        return status_code(request, HTTP_406_NOT_ACCEPTABLE)
 
 
 @get("/image/png", tags=["Images"])
