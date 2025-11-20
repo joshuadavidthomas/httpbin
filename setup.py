@@ -1,6 +1,5 @@
 from setuptools import setup, find_packages
 import os
-import io
 
 
 with open(os.path.join(os.path.realpath(os.path.dirname(__file__)), 'httpbin', 'VERSION')) as version_file:
@@ -9,8 +8,8 @@ with open(os.path.join(os.path.realpath(os.path.dirname(__file__)), 'httpbin', '
 setup(
     name="httpbin",
     version=version,
-    description="HTTP Request and Response Service",
-    long_description="A simple HTTP Request & Response Service, written in Python + Flask.",
+    description="HTTP Request and Response Service (FastAPI)",
+    long_description="A simple HTTP Request & Response Service, rewritten in modern Python with FastAPI.",
 
     # The project URL.
     url='https://github.com/requests/httpbin',
@@ -23,19 +22,26 @@ setup(
     license='MIT',
 
     classifiers=[
-         'Development Status :: 5 - Production/Stable',
-         'Intended Audience :: Developers',
-         'Natural Language :: English',
-         'License :: OSI Approved :: MIT License',
-         'Programming Language :: Python',
-         'Programming Language :: Python :: 2.7',
-         'Programming Language :: Python :: 3.6',
+        'Development Status :: 5 - Production/Stable',
+        'Intended Audience :: Developers',
+        'Natural Language :: English',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
     ],
-    test_suite="test_httpbin",
     packages=find_packages(),
-    include_package_data = True, # include files listed in MANIFEST.in
+    include_package_data=True,  # include files listed in MANIFEST.in
     install_requires=[
-        'Flask', 'MarkupSafe', 'decorator', 'itsdangerous', 'six', 'brotlipy',
-        'raven[flask]', 'werkzeug>=0.14.1', 'gevent', 'flasgger'
+        'fastapi>=0.115.0',
+        'uvicorn[standard]>=0.32.0',
+        'python-multipart>=0.0.12',
+        'brotli>=1.1.0',
+        'werkzeug>=3.0.0',
+        'jinja2>=3.1.0',
     ],
 )
